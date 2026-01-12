@@ -48,6 +48,7 @@ describe.each(
     expect(files).toContain('_expo/loaders/posts/static-post-2');
     expect(files).toContain('_expo/loaders/nullish/undefined');
     expect(files).toContain('_expo/loaders/nullish/null');
+    expect(files).toContain('_expo/loaders/response');
   });
 
   it('loader endpoint returns JSON', async () => {
@@ -67,6 +68,17 @@ describe.each(
 
     const data = await response.json();
     expect(data.params).toHaveProperty('postId', 'static-post-1');
+  });
+
+  it('loader endpoint returns `Response` body', async () => {
+    const response = await server.fetchAsync('/_expo/loaders/response');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).not.toContain('application/json');
+    expect(response.headers.get('cache-control')).not.toBe('public, max-age=3600');
+    expect(response.headers.get('x-custom-header')).not.toBe('test-value');
+
+    const data = await response.json();
+    expect(data).toEqual({ foo: 'bar' });
   });
 
   it('returns `{}` for `undefined` loader data', async () => {

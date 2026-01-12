@@ -1,6 +1,6 @@
 import type { Manifest, MiddlewareInfo, RawManifest, Route } from '../../manifest';
 import type { LoaderModule, RenderOptions, ServerRenderModule, SsrRenderFn } from '../../rendering';
-import { parseParams } from '../../utils/matchers';
+import { isResponse, parseParams } from '../../utils/matchers';
 
 function initManifestRegExp(manifest: RawManifest): Manifest {
   return {
@@ -80,10 +80,7 @@ export function createEnvironment(input: EnvironmentInput) {
     return ssrRenderer;
   }
 
-  async function executeLoader(
-    request: Request,
-    route: Route
-  ): Promise<{ data: unknown } | undefined> {
+  async function executeLoader(request: Request, route: Route): Promise<unknown> {
     if (!route.loader) {
       return undefined;
     }
@@ -92,8 +89,7 @@ export function createEnvironment(input: EnvironmentInput) {
       return undefined;
     }
     const params = parseParams(request, route);
-    const data = await loaderModule.loader({ params, request });
-    return { data: data === undefined ? {} : data };
+    return loaderModule.loader({ params, request });
   }
 
   return {
@@ -108,9 +104,11 @@ export function createEnvironment(input: EnvironmentInput) {
         let renderOptions: RenderOptions | undefined;
 
         try {
-          const loaderResult = await executeLoader(request, route);
-          if (loaderResult) {
-            renderOptions = { loader: { data: loaderResult.data } };
+          const result = await executeLoader(request, route);
+          if (result !== undefined) {
+            const data = isResponse(result) ? await result.json() : result;
+            const normalizedData = data === undefined ? {} : data;
+            renderOptions = { loader: { data: normalizedData } };
           }
           return await renderer(request, renderOptions);
         } catch (error) {
@@ -148,8 +146,15 @@ export function createEnvironment(input: EnvironmentInput) {
       return mod;
     },
 
-    async getLoaderData(request: Request, route: Route): Promise<{ data: unknown } | undefined> {
-      return executeLoader(request, route);
+    async getLoaderData(request: Request, route: Route): Promise<Response> {
+      const result = await executeLoader(request, route);
+
+      if (isResponse(result)) {
+        return result;
+      }
+
+      const data = result === undefined ? {} : result;
+      return Response.json(data);
     },
   };
 }

@@ -128,7 +128,7 @@ describe(DataLoaderModuleMiddleware, () => {
   describe('handleRequestAsync()', () => {
     it('generates a loader module', async () => {
       const loaderData = { foo: 'bar', count: 42 };
-      mockExecuteRouteLoader.mockResolvedValue({ data: loaderData });
+      mockExecuteRouteLoader.mockResolvedValue(Response.json(loaderData));
 
       const res = getMockRes();
       const next = jest.fn();
@@ -145,8 +145,8 @@ describe(DataLoaderModuleMiddleware, () => {
           namedRegex: expect.any(RegExp),
         })
       );
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json; charset=utf-8');
-      expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-cache');
+      expect(res.setHeader).toHaveBeenCalledWith('content-type', 'application/json');
+      expect(res.setHeader).toHaveBeenCalledWith('cache-control', 'no-cache');
       expect(res.statusCode).toBe(200);
       expect(res.end).toHaveBeenCalledWith(JSON.stringify(loaderData));
       expect(next).not.toHaveBeenCalled();
@@ -154,7 +154,7 @@ describe(DataLoaderModuleMiddleware, () => {
 
     it('handles nested route paths', async () => {
       const loaderData = { postId: '123', title: 'Test Post' };
-      mockExecuteRouteLoader.mockResolvedValue({ data: loaderData });
+      mockExecuteRouteLoader.mockResolvedValue(Response.json(loaderData));
 
       const res = getMockRes();
       const next = jest.fn();
@@ -176,7 +176,7 @@ describe(DataLoaderModuleMiddleware, () => {
 
     it('handles dynamic route segments', async () => {
       const loaderData = { dynamic: true };
-      mockExecuteRouteLoader.mockResolvedValue({ data: loaderData });
+      mockExecuteRouteLoader.mockResolvedValue(Response.json(loaderData));
 
       const res = getMockRes();
       const next = jest.fn();
@@ -195,7 +195,40 @@ describe(DataLoaderModuleMiddleware, () => {
       );
     });
 
-    it('returns 404 when loader result is undefined', async () => {
+    it('returns `{}` for `undefined` loader data', async () => {
+      // `undefined` is normalized to `{}` by `MetroBundlerDevServer#executeServerDataLoaderAsync()`
+      mockExecuteRouteLoader.mockResolvedValue(Response.json({}));
+
+      const res = getMockRes();
+      const next = jest.fn();
+      const req = asRequest({
+        url: '/_expo/loaders/null-data',
+        method: 'GET',
+      });
+
+      await middleware.handleRequestAsync(req, res, next);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.end).toHaveBeenCalledWith('{}');
+    });
+
+    it('returns `null` for `null` loader data', async () => {
+      mockExecuteRouteLoader.mockResolvedValue(Response.json(null));
+
+      const res = getMockRes();
+      const next = jest.fn();
+      const req = asRequest({
+        url: '/_expo/loaders/null-data',
+        method: 'GET',
+      });
+
+      await middleware.handleRequestAsync(req, res, next);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.end).toHaveBeenCalledWith('null');
+    });
+
+    it('returns 404 when loader result is `undefined`', async () => {
       mockExecuteRouteLoader.mockResolvedValue(undefined);
 
       const res = getMockRes();
@@ -209,22 +242,6 @@ describe(DataLoaderModuleMiddleware, () => {
 
       expect(res.statusCode).toBe(404);
       expect(res.end).toHaveBeenCalledWith();
-    });
-
-    it('returns `null` for `null` loader data', async () => {
-      mockExecuteRouteLoader.mockResolvedValue({ data: null });
-
-      const res = getMockRes();
-      const next = jest.fn();
-      const req = asRequest({
-        url: '/_expo/loaders/null-data',
-        method: 'GET',
-      });
-
-      await middleware.handleRequestAsync(req, res, next);
-
-      expect(res.statusCode).toBe(200);
-      expect(res.end).toHaveBeenCalledWith('null');
     });
 
     it('handles loader execution errors gracefully', async () => {
@@ -261,7 +278,7 @@ describe(DataLoaderModuleMiddleware, () => {
         unicode: '你好世界 🌍',
         html: '<script>alert("xss")</script>',
       };
-      mockExecuteRouteLoader.mockResolvedValue({ data: loaderData });
+      mockExecuteRouteLoader.mockResolvedValue(Response.json(loaderData));
 
       const res = getMockRes();
       const next = jest.fn();
@@ -279,6 +296,34 @@ describe(DataLoaderModuleMiddleware, () => {
       expect(expectedOutput).toContain('\\\\Users\\\\test');
       expect(expectedOutput).toContain('\\n');
     });
+
+    it('forwards custom headers from `Response`', async () => {
+      const loaderData = { test: 'data' };
+      mockExecuteRouteLoader.mockResolvedValue(
+        new Response(JSON.stringify(loaderData), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=3600',
+            'X-Custom-Header': 'test-value',
+          },
+        })
+      );
+
+      const res = getMockRes();
+      const next = jest.fn();
+      const req = asRequest({
+        url: '/_expo/loaders/with-headers',
+        method: 'GET',
+      });
+
+      await middleware.handleRequestAsync(req, res, next);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.setHeader).toHaveBeenCalledWith('content-type', 'application/json');
+      expect(res.setHeader).toHaveBeenCalledWith('cache-control', 'public, max-age=3600');
+      expect(res.setHeader).toHaveBeenCalledWith('x-custom-header', 'test-value');
+      expect(res.end).toHaveBeenCalledWith(JSON.stringify(loaderData));
+    });
   });
 
   it.each([
@@ -290,7 +335,7 @@ describe(DataLoaderModuleMiddleware, () => {
     'correctly converts loader path $loaderPath to route path $expectedRoute',
     async ({ loaderPath, expectedRoute }) => {
       mockExecuteRouteLoader.mockClear();
-      mockExecuteRouteLoader.mockResolvedValue({ data: {} });
+      mockExecuteRouteLoader.mockResolvedValue(Response.json({}));
 
       const res = getMockRes();
       const next = jest.fn();
