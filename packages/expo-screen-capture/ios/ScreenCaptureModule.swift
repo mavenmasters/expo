@@ -5,7 +5,14 @@ let onScreenshotEventName = "onScreenshot"
 public final class ScreenCaptureModule: Module {
   private var isBeingObserved = false
   private var isListening = false
-  private var blockView = UIView()
+  private lazy var blockView = {
+    precondition(Thread.isMainThread, "blockView must be accessed from main thread only")
+    let view = UIView()
+    let boundLength = max(UIScreen.main.bounds.size.width, UIScreen.main.bounds.size.height)
+    view.frame = CGRect(x: 0, y: 0, width: boundLength, height: boundLength)
+    view.backgroundColor = .black
+    return view
+  }()
   private var protectionTextField: UITextField?
   private var originalParent: CALayer?
   private var blurEffectView: AnimatedBlurEffectView?
@@ -20,12 +27,6 @@ public final class ScreenCaptureModule: Module {
     Name("ExpoScreenCapture")
 
     Events(onScreenshotEventName)
-
-    OnCreate {
-      let boundLength = max(UIScreen.main.bounds.size.width, UIScreen.main.bounds.size.height)
-      blockView.frame = CGRect(x: 0, y: 0, width: boundLength, height: boundLength)
-      blockView.backgroundColor = .black
-    }
 
     OnDestroy {
       allowScreenshots()
