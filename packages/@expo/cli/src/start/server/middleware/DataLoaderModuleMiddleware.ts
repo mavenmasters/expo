@@ -1,5 +1,5 @@
 import { getConfig } from '@expo/config';
-import { type RouteInfo } from 'expo-server/private';
+import { ImmutableRequest, type RouteInfo } from 'expo-server/private';
 import { Readable } from 'node:stream';
 
 import { ExpoMiddleware } from './ExpoMiddleware';
@@ -21,7 +21,7 @@ export class DataLoaderModuleMiddleware extends ExpoMiddleware {
     private executeServerDataLoaderAsync: (
       url: URL,
       route: RouteInfo<RegExp>,
-      request?: Request
+      request?: ImmutableRequest
     ) => Promise<{ data: unknown } | undefined>,
     private getDevServerUrl: () => string
   ) {
@@ -101,10 +101,10 @@ export class DataLoaderModuleMiddleware extends ExpoMiddleware {
 }
 
 /**
- * Converts a Node.js `ServerRequest` to a standard web `Request` object.
+ * Converts a Node.js `ServerRequest` to an `ImmutableRequest` object.
  * @see import('expo-server/src/vendor/http.ts').convertRequest
  */
-function convertServerRequest(req: ServerRequest, res: ServerResponse, url: URL): Request {
+function convertServerRequest(req: ServerRequest, res: ServerResponse, url: URL): ImmutableRequest {
   const controller = new AbortController();
   res.on('close', () => controller.abort());
 
@@ -120,7 +120,7 @@ function convertServerRequest(req: ServerRequest, res: ServerResponse, url: URL)
     (init as any).duplex = 'half';
   }
 
-  return new Request(url.href, init);
+  return new ImmutableRequest(new Request(url.href, init));
 }
 
 function convertRawHeaders(requestHeaders: readonly string[]): Headers {

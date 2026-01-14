@@ -1,4 +1,5 @@
 import { getConfig } from '@expo/config';
+import { ImmutableRequest } from 'expo-server/private';
 
 import { fetchManifest } from '../../metro/fetchRouterManifest';
 import { DataLoaderModuleMiddleware } from '../DataLoaderModuleMiddleware';
@@ -410,7 +411,7 @@ describe(DataLoaderModuleMiddleware, () => {
       expect(mockExecuteRouteLoader).toHaveBeenCalledWith(
         expect.any(URL),
         expect.any(Object),
-        expect.any(Request)
+        expect.any(ImmutableRequest)
       );
 
       const passedRequest = mockExecuteRouteLoader.mock.calls[0][2] as Request;
